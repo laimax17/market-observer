@@ -4,11 +4,13 @@
 > `agentic_trading_system` 完全独立。
 
 ## 这个项目是什么
-每日盘前产出一份 watchlist（20–50 支）的市场简报，推送到 Discord。
+每日盘前产出一份 watchlist（10 支）的市场简报，推送到 Discord。
 内容包括：
 - 代码计算的技术指标（RSI/MACD/MA 等）
 - 期权端 EOD 信号（IV term structure、put/call、IV skew）
-- LLM 写一段对以上结构化事实的叙述
+- multi-agent LLM 团（技术面/期权/宏观 三专科 + 主编）写的叙述
+
+> 权威设计见 docs/00_design.md。实现严格按该文档（任务 T-01..T-11）。
 
 ## 这个项目不是什么
 - **不下单**。永远不调用任何交易 API。
