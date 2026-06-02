@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import date
 
 from market_observer.data.provider import OHLCV
@@ -51,6 +51,32 @@ class FakeProvider:
 
     def get_event_info(self, symbol: str) -> EventInfo | None:
         return self._events.get(symbol.upper())
+
+
+class ScriptedLLM:
+    """Fake LLMClient. Returns queued responses, or invokes a callable, or
+    raises a configured exception (to exercise agent failure handling)."""
+
+    def __init__(
+        self,
+        responses: Sequence[str] | None = None,
+        handler: Callable[[str, str, bool], str] | None = None,
+        raises: Exception | None = None,
+    ) -> None:
+        self._responses = list(responses or [])
+        self._handler = handler
+        self._raises = raises
+        self.calls: list[tuple[str, str, bool]] = []
+
+    def complete(self, system: str, user: str, *, json_mode: bool = False) -> str:
+        self.calls.append((system, user, json_mode))
+        if self._raises is not None:
+            raise self._raises
+        if self._handler is not None:
+            return self._handler(system, user, json_mode)
+        if self._responses:
+            return self._responses.pop(0)
+        return ""
 
 
 def make_ohlcv(n: int = 250, start: float = 100.0, step: float = 0.5) -> OHLCV:
