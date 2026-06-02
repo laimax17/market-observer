@@ -9,10 +9,45 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
+from datetime import date
+
+from market_observer.domain.models import EventInfo
+from market_observer.domain.options_math import ExpiryChain, OptionQuote
 
 from .provider import OHLCV
 
 logger = logging.getLogger(__name__)
+
+
+def _opt_float(value: object) -> float | None:
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if f != f:  # NaN
+        return None
+    return f
+
+
+def _rows_to_quotes(df: object) -> list[OptionQuote]:
+    quotes: list[OptionQuote] = []
+    try:
+        records = df.to_dict("records")  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001
+        return quotes
+    for row in records:
+        strike = _opt_float(row.get("strike"))
+        if strike is None:
+            continue
+        quotes.append(
+            OptionQuote(
+                strike=strike,
+                implied_vol=_opt_float(row.get("impliedVolatility")),
+                volume=_opt_float(row.get("volume")),
+                open_interest=_opt_float(row.get("openInterest")),
+            )
+        )
+    return quotes
 
 # Fallback universe if the Wikipedia constituent fetch fails: liquid mega-caps.
 _FALLBACK_UNIVERSE: tuple[str, ...] = (
@@ -87,3 +122,66 @@ class YFinanceProvider:
             except (KeyError, ValueError, TypeError):
                 continue
         return out
+
+    def get_option_expiries(self, symbol: str) -> list[date]:
+        try:
+            import yfinance as yf
+
+            raw = yf.Ticker(symbol).options or ()
+            return [date.fromisoformat(d) for d in raw]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("option expiries fetch failed for %s: %s", symbol, exc)
+            return []
+
+    def get_option_chain(self, symbol: str, expiry: date) -> ExpiryChain | None:
+        try:
+            import yfinance as yf
+
+            oc = yf.Ticker(symbol).option_chain(expiry.isoformat())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("option chain fetch failed for %s %s: %s", symbol, expiry, exc)
+            return None
+        return ExpiryChain(
+            expiry=expiry,
+            calls=_rows_to_quotes(oc.calls),
+            puts=_rows_to_quotes(oc.puts),
+        )
+
+    def get_macro_quote(self, symbol: str) -> tuple[float | None, float | None]:
+        hist = self.get_history(symbol, 7)
+        if hist is None or not hist.closes:
+            return None, None
+        last = hist.closes[-1]
+        if len(hist.closes) < 2:
+            return last, None
+        prev = hist.closes[-2]
+        pct = (last / prev - 1.0) * 100.0 if prev else None
+        return last, pct
+
+    def get_event_info(self, symbol: str) -> EventInfo | None:
+        try:
+            import yfinance as yf
+
+            cal = yf.Ticker(symbol).calendar
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("calendar fetch failed for %s: %s", symbol, exc)
+            return None
+        if not isinstance(cal, dict):
+            return None
+
+        def _first_date(value: object) -> date | None:
+            seq = value if isinstance(value, (list, tuple)) else [value]
+            for item in seq:
+                if isinstance(item, date):
+                    return item
+                try:
+                    return date.fromisoformat(str(item))
+                except (TypeError, ValueError):
+                    continue
+            return None
+
+        earnings = _first_date(cal.get("Earnings Date"))
+        ex_div = _first_date(cal.get("Ex-Dividend Date"))
+        if earnings is None and ex_div is None:
+            return None
+        return EventInfo(next_earnings_date=earnings, next_ex_dividend_date=ex_div)
