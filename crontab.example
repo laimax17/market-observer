@@ -1,0 +1,12 @@
+# market-observer — daily pre-market briefing
+#
+# Runs once every weekday morning before the US cash open. Times are in the
+# server's local timezone; adjust to your box. 12:00 UTC ~= 08:00 ET (08:00
+# before DST handoffs may shift by an hour — use a TZ-aware scheduler if that
+# matters to you).
+#
+# Install:  crontab crontab.example      (or paste the line into `crontab -e`)
+# Logs:     append stdout/stderr to a file you can tail from your phone.
+#
+# Mon–Fri at 12:00 UTC. Replace the paths with your checkout + uv location.
+0 12 * * 1-5  cd /path/to/market-observer && /usr/bin/env uv run python -m market_observer.run_briefing >> /path/to/market-observer/output/cron.log 2>&1
