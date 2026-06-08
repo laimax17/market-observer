@@ -9,6 +9,7 @@ from market_observer.domain.models import (
     BriefingData,
     MacroContext,
     MacroQuote,
+    NewsItem,
     OptionsSignal,
     SymbolNarrative,
     SymbolSnapshot,
@@ -72,6 +73,24 @@ def test_symbol_embed_includes_structured_narrative() -> None:
     embeds = build_embeds(_briefing(n_symbols=1, structured=True))
     desc = embeds[1]["description"]
     assert "近况" in desc and "归因" in desc and "预测" in desc
+
+
+def test_symbol_embed_shows_news_sources() -> None:
+    b = _briefing(n_symbols=1)
+    b.data.symbols[0].news = [
+        NewsItem(title="Oppenheimer Says SpaceX Could Disrupt Telecom", published=date(2026, 6, 7)),
+        NewsItem(title="Chips Rebound As Tensions Ease", published=date(2026, 6, 8)),
+    ]
+    news_field = next(
+        f for f in build_embeds(b)[1]["fields"] if f["name"] == "近期新闻"
+    )
+    assert "Oppenheimer" in news_field["value"]
+    assert "Chips Rebound" in news_field["value"]
+
+
+def test_symbol_embed_omits_news_field_when_no_news() -> None:
+    embeds = build_embeds(_briefing(n_symbols=1))
+    assert all(f["name"] != "近期新闻" for f in embeds[1]["fields"])
 
 
 def test_batch_respects_count_limit() -> None:

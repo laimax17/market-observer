@@ -97,6 +97,16 @@ def _levels_value(snap: SymbolSnapshot) -> str:
     return f"隐含区间 {implied}\nSMA20/50/200 {smas}"
 
 
+def _news_value(snap: SymbolSnapshot, limit: int = 5) -> str:
+    """The headlines the model could attribute to — shown so each 归因 is
+    auditable against its source (the synthesizer saw these exact titles)."""
+    lines = []
+    for n in snap.news[:limit]:
+        d = f"{n.published.isoformat()} · " if n.published else ""
+        lines.append(_clip(f"{d}{n.title}", 100))
+    return "\n".join(lines)
+
+
 def _symbol_embed(briefing: Briefing, snap: SymbolSnapshot) -> dict[str, Any]:
     style = signal_style(snap)
     t = snap.technicals
@@ -122,6 +132,8 @@ def _symbol_embed(briefing: Briefing, snap: SymbolSnapshot) -> dict[str, Any]:
         note = (o.note if o else None) or "数据不足"
         fields.append(_field("期权信号", note))
     fields.append(_field("关键价位", _levels_value(snap), inline=False))
+    if snap.news:
+        fields.append(_field("近期新闻", _news_value(snap), inline=False))
 
     return {
         "title": _clip(f"{style.emoji} {snap.symbol} · {price(snap.last_price)}  {style.label}", TITLE_CAP),

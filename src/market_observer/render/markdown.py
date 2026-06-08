@@ -96,7 +96,7 @@ def _levels_line(snap: SymbolSnapshot) -> str:
     )
 
 
-def _news_lines(snap: SymbolSnapshot, limit: int = 3) -> list[str]:
+def _news_lines(snap: SymbolSnapshot, limit: int = 5) -> list[str]:
     if not snap.news:
         return []
     out = ["**近期新闻**"]
