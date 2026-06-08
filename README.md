@@ -150,18 +150,46 @@ uv run python -m market_observer.run_briefing
 
 ---
 
-## 6. 测试
+## 6. 在 GitHub 上 fork 并自动跑（推荐：不用自己开机器）
+
+不想让简报依赖你自己的电脑/服务器常开机，最省事的方式是 **fork 这个仓库，让 GitHub Actions 在云端每天定时帮你跑**。仓库里已带好工作流 [`.github/workflows/briefing.yml`](.github/workflows/briefing.yml)，fork 过去开箱即用。
+
+**步骤：**
+
+1. **Fork**：打开 `https://github.com/laimax17/market-observer`，点右上角 **Fork**，复制到你自己的账号下（比如 `你的用户名/market-observer`）。
+
+2. **打开 Actions**：fork 出来的仓库默认会禁用 Actions。进 fork 仓库的 **Actions** 标签页，点 **“I understand my workflows, go ahead and enable them”** 启用。
+
+3. **配置密钥（Secrets）**：进 **Settings → Secrets and variables → Actions → New repository secret**，添加两个（都可选，缺了会优雅降级）：
+   | Secret 名 | 值 |
+   |---|---|
+   | `MO_DEEPSEEK_API_KEY` | 你的 DeepSeek API key（缺了 → 只出纯数据简报，无叙事） |
+   | `MO_DISCORD_WEBHOOK_URL` | 你的 Discord webhook（缺了 → 只存档不推送） |
+
+   > ⚠️ 密钥**只**放在这里（GitHub 加密保存），**绝不要**写进代码或 `.env.example` 提交上去。
+
+4. **给工作流写权限**：工作流跑完会把当天简报 commit 回 `briefings/` 目录，需要写权限。进 **Settings → Actions → General → Workflow permissions**，选 **“Read and write permissions”** 并保存（否则最后那步 `git push` 会失败）。
+
+5. **手动试跑一次**：进 **Actions → 左侧 `daily-briefing` → 右侧 “Run workflow”** 手动触发。绿勾即成功；这时你的 Discord 应该收到推送，`briefings/` 里也多出一份 `briefing_日期.md`。
+
+6. **之后自动跑**：工作流已设定 **周一至五 12:00 UTC（≈ 美东 08:00）** 自动触发（GitHub 定时可能延迟最多 ~15 分钟，盘前无所谓）。想改时间或观察清单，编辑 `briefing.yml` 里的 `cron` 和 `MO_PINNED_SYMBOLS` / `MO_WATCHLIST_SIZE` 即可。
+
+**和 cron 方式的取舍**：GitHub Actions 免费额度对每天一跑绰绰有余、不用自己维护机器；缺点是定时不精确（可接受）、简报会以 commit 形式存在你的公开 fork 里（不想公开就把 fork 设为 private）。
+
+---
+
+## 7. 测试
 
 ```bash
 uv run ruff check .   # 静态检查
-uv run pytest -q      # 全套单测（83 个，用 FakeProvider + ScriptedLLM，不需要任何真实凭证/网络）
+uv run pytest -q      # 全套单测（107 个，用 FakeProvider + ScriptedLLM，不需要任何真实凭证/网络）
 ```
 
 整条链路都用注入式的假 Provider 和假 LLM 测过，所以无凭证、无网络也能完整验证逻辑。
 
 ---
 
-## 7. 目录结构
+## 8. 目录结构
 
 ```
 src/market_observer/
@@ -181,7 +209,7 @@ crontab.example          # 定时任务示例
 
 ---
 
-## 8. 与 `agentic_trading_system` 的关系
+## 9. 与 `agentic_trading_system` 的关系
 
 这是**有意分开**的沙箱项目。主项目 `agentic_trading_system` 是 fail-closed、单写者、事件溯源的交易核心，契约已冻结；本项目是探索性的、只读的，可能快速演进。**两者不共享代码。**
 
