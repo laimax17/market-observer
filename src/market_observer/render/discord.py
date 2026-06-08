@@ -7,8 +7,15 @@ mobile's 2-column view), and the four-part narrative in the description.
 
 Pure functions only. ``build_embeds`` returns a flat list of embed dicts;
 ``batch_embeds`` splits them into per-message batches respecting Discord's
-limits (<=10 embeds and <=6000 characters per message). The notifier just
-POSTs each batch.
+limits. The notifier just POSTs each batch.
+
+Batching note (learned the hard way): Discord's documented "6000 characters
+per message" is enforced against the UTF-8 *byte* length, not Python's
+``len()``. With CJK content (3 bytes/char) a message that looks like ~3.5k
+"characters" is already ~8.5k bytes, and Discord rejects it with an opaque
+``500`` (not a clean ``400``). So we (1) count UTF-8 bytes, and (2) keep a
+conservative per-message embed cap with margin below the empirical failure
+point (~9 dense CJK cards). Five rich cards per message is comfortably safe.
 """
 
 from __future__ import annotations
@@ -31,8 +38,11 @@ from .format import (
     today_highlights,
 )
 
-MAX_EMBEDS_PER_MESSAGE = 10
-MAX_CHARS_PER_MESSAGE = 6000
+# Discord allows up to 10 embeds/message, but dense CJK cards trigger a 500
+# well before that, so we cap conservatively. MAX_BYTES is measured in UTF-8
+# bytes (see module docstring), kept under the ~8.5k-byte empirical limit.
+MAX_EMBEDS_PER_MESSAGE = 5
+MAX_CHARS_PER_MESSAGE = 6000  # UTF-8 bytes per message (not Python len())
 # Stay clear of Discord's hard caps.
 TITLE_CAP = 240
 DESC_CAP = 4000
@@ -157,13 +167,20 @@ def build_embeds(briefing: Briefing) -> list[dict[str, Any]]:
     return embeds
 
 
+def _blen(text: object) -> int:
+    """UTF-8 byte length — what Discord actually counts toward its limit."""
+    return len(str(text).encode("utf-8"))
+
+
 def embed_char_count(embed: dict[str, Any]) -> int:
-    total = len(str(embed.get("title", ""))) + len(str(embed.get("description", "")))
+    """Discord-relevant size of an embed, in UTF-8 bytes (title + description
+    + every field name/value + footer text)."""
+    total = _blen(embed.get("title", "")) + _blen(embed.get("description", ""))
     for f in embed.get("fields", []):
-        total += len(str(f.get("name", ""))) + len(str(f.get("value", "")))
+        total += _blen(f.get("name", "")) + _blen(f.get("value", ""))
     footer = embed.get("footer")
     if isinstance(footer, dict):
-        total += len(str(footer.get("text", "")))
+        total += _blen(footer.get("text", ""))
     return total
 
 

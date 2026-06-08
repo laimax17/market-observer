@@ -92,3 +92,19 @@ def test_render_embed_messages_end_to_end() -> None:
     messages = render_embed_messages(_briefing(n_symbols=2))
     assert messages
     assert all(isinstance(m, list) for m in messages)
+
+
+def test_embed_char_count_uses_utf8_bytes() -> None:
+    # CJK chars are 3 bytes each in UTF-8; Discord counts bytes, not len().
+    embed = {"title": "你好", "description": "", "fields": []}
+    assert embed_char_count(embed) == len("你好".encode()) == 6
+
+
+def test_batch_caps_dense_cjk_message_under_byte_budget() -> None:
+    # Regression: dense CJK cards used to overflow Discord's real (byte) limit
+    # and 500. Every message must stay within the embed-count and byte budget.
+    embeds = build_embeds(_briefing(n_symbols=10))
+    batches = batch_embeds(embeds)
+    assert all(len(b) <= MAX_EMBEDS_PER_MESSAGE for b in batches)
+    assert all(sum(embed_char_count(e) for e in b) <= MAX_CHARS_PER_MESSAGE for b in batches)
+    assert sum(len(b) for b in batches) == len(embeds)
