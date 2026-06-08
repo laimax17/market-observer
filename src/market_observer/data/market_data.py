@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from datetime import date
 
+from market_observer.domain.forecast import compute_recent_action
 from market_observer.domain.indicators import compute_indicators
 from market_observer.domain.models import SymbolSnapshot
 
@@ -34,4 +35,5 @@ def build_symbol_snapshot(
         as_of=as_of,
         last_price=hist.closes[-1],
         technicals=tech,
+        recent=compute_recent_action(hist.closes),
     )

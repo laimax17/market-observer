@@ -9,9 +9,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from datetime import date
+from datetime import UTC, date, datetime
 
-from market_observer.domain.models import EventInfo
+from market_observer.domain.models import EventInfo, NewsItem
 from market_observer.domain.options_math import ExpiryChain, OptionQuote
 
 from .provider import OHLCV
@@ -48,6 +48,48 @@ def _rows_to_quotes(df: object) -> list[OptionQuote]:
             )
         )
     return quotes
+
+def _parse_news_entry(entry: dict) -> NewsItem | None:
+    """Tolerate both yfinance news shapes: the legacy flat dict
+    (``title``/``publisher``/``providerPublishTime``) and the newer nested
+    ``{"content": {...}}`` form."""
+    content = entry.get("content") if isinstance(entry.get("content"), dict) else entry
+    title = content.get("title") or entry.get("title")
+    if not title:
+        return None
+
+    publisher = entry.get("publisher")
+    prov = content.get("provider")
+    if publisher is None and isinstance(prov, dict):
+        publisher = prov.get("displayName")
+
+    url = entry.get("link")
+    canon = content.get("canonicalUrl")
+    if url is None and isinstance(canon, dict):
+        url = canon.get("url")
+
+    published: date | None = None
+    epoch = entry.get("providerPublishTime")
+    if isinstance(epoch, (int, float)):
+        try:
+            published = datetime.fromtimestamp(epoch, tz=UTC).date()
+        except (OverflowError, OSError, ValueError):
+            published = None
+    else:
+        iso = content.get("pubDate") or content.get("displayTime")
+        if isinstance(iso, str):
+            try:
+                published = datetime.fromisoformat(iso.replace("Z", "+00:00")).date()
+            except ValueError:
+                published = None
+
+    return NewsItem(
+        title=str(title),
+        publisher=str(publisher) if publisher else None,
+        published=published,
+        url=str(url) if url else None,
+    )
+
 
 # Fallback universe if the Wikipedia constituent fetch fails: liquid mega-caps.
 _FALLBACK_UNIVERSE: tuple[str, ...] = (
@@ -195,3 +237,22 @@ class YFinanceProvider:
         if earnings is None and ex_div is None:
             return None
         return EventInfo(next_earnings_date=earnings, next_ex_dividend_date=ex_div)
+
+    def get_recent_news(self, symbol: str, limit: int = 5) -> list[NewsItem]:
+        try:
+            import yfinance as yf
+
+            raw = yf.Ticker(symbol).news or []
+        except Exception as exc:  # noqa: BLE001 - empty on any failure
+            logger.warning("news fetch failed for %s: %s", symbol, exc)
+            return []
+        items: list[NewsItem] = []
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            item = _parse_news_entry(entry)
+            if item is not None:
+                items.append(item)
+            if len(items) >= limit:
+                break
+        return items

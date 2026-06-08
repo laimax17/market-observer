@@ -15,6 +15,7 @@ from market_observer.agents.orchestrator import run_briefing as run_agent_dag
 from market_observer.data.events import build_event_info
 from market_observer.data.macro import build_macro_context
 from market_observer.data.market_data import build_symbol_snapshot
+from market_observer.data.news import build_recent_news
 from market_observer.data.options_data import build_options_signal
 from market_observer.data.provider import MarketDataProvider
 from market_observer.data.watchlist import build_watchlist
@@ -33,9 +34,12 @@ def assemble_briefing_data(
     snapshots = []
     for sym in symbols:
         snap = build_symbol_snapshot(provider, sym, as_of)
-        options = build_options_signal(provider, sym, snap.last_price)
+        options = build_options_signal(provider, sym, snap.last_price, as_of=as_of)
         event = build_event_info(provider, sym, as_of)
-        snapshots.append(snap.model_copy(update={"options": options, "event": event}))
+        news = build_recent_news(provider, sym)
+        snapshots.append(
+            snap.model_copy(update={"options": options, "event": event, "news": news})
+        )
     macro = build_macro_context(provider, as_of)
     return BriefingData(as_of=as_of, macro=macro, symbols=snapshots)
 

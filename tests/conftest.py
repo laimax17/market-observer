@@ -6,7 +6,7 @@ from collections.abc import Callable, Sequence
 from datetime import date
 
 from market_observer.data.provider import OHLCV
-from market_observer.domain.models import EventInfo
+from market_observer.domain.models import EventInfo, NewsItem
 from market_observer.domain.options_math import ExpiryChain
 
 
@@ -22,6 +22,7 @@ class FakeProvider:
         chains: dict[tuple[str, date], ExpiryChain] | None = None,
         macro: dict[str, tuple[float | None, float | None]] | None = None,
         events: dict[str, EventInfo] | None = None,
+        news: dict[str, list[NewsItem]] | None = None,
     ) -> None:
         self._histories = histories or {}
         self._universe = universe or []
@@ -30,6 +31,7 @@ class FakeProvider:
         self._chains = chains or {}
         self._macro = macro or {}
         self._events = events or {}
+        self._news = news or {}
 
     def get_history(self, symbol: str, lookback_days: int) -> OHLCV | None:
         return self._histories.get(symbol.upper())
@@ -51,6 +53,9 @@ class FakeProvider:
 
     def get_event_info(self, symbol: str) -> EventInfo | None:
         return self._events.get(symbol.upper())
+
+    def get_recent_news(self, symbol: str, limit: int) -> list[NewsItem]:
+        return list(self._news.get(symbol.upper(), []))[:limit]
 
 
 class ScriptedLLM:

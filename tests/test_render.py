@@ -65,7 +65,7 @@ def test_render_contains_core_sections() -> None:
     assert "整体平稳。" in md
     assert "## 宏观快照" in md
     assert "VIX" in md
-    assert "### AAPL" in md
+    assert "AAPL · " in md  # per-symbol heading carries emoji/price/label
     assert "技术中性，期权偏防御。" in md
     assert "RSI(14)" in md
     assert briefing_disclaimer() in md
@@ -99,4 +99,4 @@ def test_render_handles_all_none_numbers() -> None:
     b = Briefing(generated_at=datetime(2026, 6, 1, 8, 0), data=data)
     md = render_briefing(b)
     assert "—" in md  # missing numbers shown as dash
-    assert "### ZZZZ" in md
+    assert "ZZZZ · " in md

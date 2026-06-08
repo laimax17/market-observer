@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Protocol, runtime_checkable
 
-from market_observer.domain.models import EventInfo
+from market_observer.domain.models import EventInfo, NewsItem
 from market_observer.domain.options_math import ExpiryChain
 
 
@@ -46,3 +46,6 @@ class MarketDataProvider(Protocol):
     def get_macro_quote(self, symbol: str) -> tuple[float | None, float | None]: ...
 
     def get_event_info(self, symbol: str) -> EventInfo | None: ...
+
+    # --- news (grounds the 'why' section) ---
+    def get_recent_news(self, symbol: str, limit: int) -> list[NewsItem]: ...

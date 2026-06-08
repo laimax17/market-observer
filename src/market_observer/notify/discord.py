@@ -7,6 +7,7 @@ each chunk via an injectable httpx.Client.
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 import httpx
 
@@ -77,3 +78,19 @@ class DiscordNotifier:
                 ) from exc
         logger.info("sent %d discord message(s)", len(chunks))
         return len(chunks)
+
+    def send_embeds(self, batches: list[list[dict[str, Any]]]) -> int:
+        """Post coloured embed cards. ``batches`` is a list of per-message
+        ``embeds`` arrays (already split to respect Discord's <=10 embeds and
+        <=6000 chars per message). Returns the number of messages sent."""
+        messages = [b for b in batches if b]
+        for idx, embeds in enumerate(messages):
+            try:
+                resp = self._client.post(self.webhook_url, json={"embeds": embeds})
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:
+                raise DiscordError(
+                    f"discord embed post failed on message {idx + 1}/{len(messages)}: {exc}"
+                ) from exc
+        logger.info("sent %d discord embed message(s)", len(messages))
+        return len(messages)

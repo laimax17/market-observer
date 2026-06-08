@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from market_observer.domain.forecast import forecast_levels
 from market_observer.domain.models import BriefingData, SymbolSnapshot
 
 
@@ -71,6 +72,47 @@ def macro_facts(data: BriefingData) -> list[dict[str, Any]]:
         {"name": q.name, "value": _r(q.value), "pct_change_1d": _r(q.pct_change_1d)}
         for q in data.macro.quotes
     ]
+
+
+def recent_facts(snap: SymbolSnapshot) -> dict[str, Any]:
+    """Short-horizon price action + upcoming events: grounds 'what happened'."""
+    r = snap.recent
+    ev = snap.event
+    return {
+        "ret_1d_pct": _r(r.ret_1d_pct) if r else None,
+        "ret_5d_pct": _r(r.ret_5d_pct) if r else None,
+        "ret_20d_pct": _r(r.ret_20d_pct) if r else None,
+        "days_to_earnings": ev.days_to_earnings if ev else None,
+    }
+
+
+def news_facts(snap: SymbolSnapshot) -> list[dict[str, Any]]:
+    """The ONLY headlines the model may use to attribute causes."""
+    return [
+        {
+            "title": n.title,
+            "publisher": n.publisher,
+            "published": n.published.isoformat() if n.published else None,
+        }
+        for n in snap.news
+    ]
+
+
+def forecast_facts(snap: SymbolSnapshot) -> dict[str, Any]:
+    """Data-grounded levels to anchor the forecast (option-implied band, ATR
+    band, moving averages). The model picks a direction *within* these."""
+    lv = forecast_levels(snap)
+    return {k: _r(v) for k, v in lv.items()}
+
+
+def synthesis_symbol_facts(snap: SymbolSnapshot) -> dict[str, Any]:
+    """Everything the synthesizer needs to write the 4-part narrative."""
+    return {
+        "symbol": snap.symbol,
+        "recent": recent_facts(snap),
+        "news": news_facts(snap),
+        "levels": forecast_facts(snap),
+    }
 
 
 def to_json(obj: Any) -> str:

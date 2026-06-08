@@ -19,6 +19,7 @@ Definitions:
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -26,6 +27,15 @@ from datetime import date
 from .models import OptionsSignal
 
 DEFAULT_OTM_PCT = 0.05
+CALENDAR_DAYS_PER_YEAR = 365.0
+
+
+def implied_move_pct(atm_iv_value: float | None, days_to_expiry: int | None) -> float | None:
+    """1-sigma expected move (percent) to expiry from annualized ATM IV:
+    ``IV * sqrt(days/365) * 100``. None if inputs are missing/non-positive."""
+    if atm_iv_value is None or days_to_expiry is None or days_to_expiry <= 0 or atm_iv_value <= 0:
+        return None
+    return atm_iv_value * math.sqrt(days_to_expiry / CALENDAR_DAYS_PER_YEAR) * 100.0
 
 
 @dataclass(frozen=True)
@@ -100,6 +110,7 @@ def compute_options_signal(
     spot: float | None,
     expiries: Sequence[ExpiryChain],
     otm_pct: float = DEFAULT_OTM_PCT,
+    as_of: date | None = None,
 ) -> OptionsSignal:
     """Assemble an ``OptionsSignal`` from a normalized chain (nearest first)."""
     if spot is None or spot <= 0 or not expiries:
@@ -113,6 +124,9 @@ def compute_options_signal(
     ts = term_structure(front_iv, next_iv)
     inverted = (ts < 0) if ts is not None else None
 
+    dte = (front.expiry - as_of).days if as_of is not None else None
+    move = implied_move_pct(front_iv, dte)
+
     signal = OptionsSignal(
         symbol=symbol,
         has_data=True,
@@ -123,6 +137,8 @@ def compute_options_signal(
         put_call_volume_ratio=put_call_ratio(front, "volume"),
         put_call_oi_ratio=put_call_ratio(front, "open_interest"),
         iv_skew=iv_skew(front, spot, otm_pct),
+        front_days_to_expiry=dte,
+        implied_move_pct=move,
     )
     # If literally nothing computed, flag it rather than presenting empty data.
     if all(

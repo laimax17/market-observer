@@ -59,9 +59,31 @@ class OptionsSignal(BaseModel):
     put_call_volume_ratio: float | None = None
     put_call_oi_ratio: float | None = None
     iv_skew: float | None = None  # OTM put IV - OTM call IV
+    front_days_to_expiry: int | None = None  # calendar days to the front expiry
+    implied_move_pct: float | None = None  # 1-sigma move to front expiry, percent
     note: str | None = None  # e.g. "insufficient option chain"
 
     _norm_symbol = field_validator("symbol")(_upper)
+
+
+class RecentAction(BaseModel):
+    """Code-computed recent price action (grounds the 'what happened' section,
+    so the LLM never has to invent it). All percent, None if insufficient
+    history."""
+
+    ret_1d_pct: float | None = None
+    ret_5d_pct: float | None = None
+    ret_20d_pct: float | None = None
+
+
+class NewsItem(BaseModel):
+    """One recent headline. Grounds the 'why' section: the LLM may only
+    attribute causes to headlines actually provided here."""
+
+    title: str
+    publisher: str | None = None
+    published: date | None = None
+    url: str | None = None
 
 
 class EventInfo(BaseModel):
@@ -81,6 +103,8 @@ class SymbolSnapshot(BaseModel):
     technicals: TechnicalIndicators = Field(default_factory=TechnicalIndicators)
     options: OptionsSignal | None = None
     event: EventInfo | None = None
+    recent: RecentAction | None = None
+    news: list[NewsItem] = Field(default_factory=list)
 
     _norm_symbol = field_validator("symbol")(_upper)
 
@@ -127,10 +151,28 @@ class SpecialistOutput(BaseModel):
 
 
 class SymbolNarrative(BaseModel):
+    """Per-symbol narrative, structured into four parts:
+
+    * ``recent``  — what happened lately (grounded in price action + headlines)
+    * ``why``     — attribution (only from the provided headlines/data)
+    * ``forecast``— a directional view: bias + odds + target band + key levels
+    * ``narrative`` — optional free-form fallback / legacy single paragraph
+
+    The forecast is a *model estimate for research only* — the system never
+    trades on it. See ``DEFAULT_DISCLAIMER``.
+    """
+
     symbol: str
-    narrative: str
+    recent: str = ""
+    why: str = ""
+    forecast: str = ""
+    narrative: str = ""
 
     _norm_symbol = field_validator("symbol")(_upper)
+
+    @property
+    def has_structured(self) -> bool:
+        return bool(self.recent or self.why or self.forecast)
 
 
 class SynthesizerOutput(BaseModel):
@@ -147,8 +189,10 @@ class SynthesizerOutput(BaseModel):
 
 
 DEFAULT_DISCLAIMER = (
-    "本简报由 market-observer 自动生成，仅供研究参考，非投资建议。"
-    "数据来自免费源，可能延迟或不完整。请勿据此直接交易。"
+    "本简报由 market-observer 自动生成。其中的方向判断、概率与目标价均为"
+    "模型基于历史数据与公开新闻得出的估计，存在错误与延迟，仅供研究参考，"
+    "并非投资建议。本系统只读、从不下单、从不接入任何真实交易账户。"
+    "请独立判断，自负盈亏，切勿据此直接交易。"
 )
 
 

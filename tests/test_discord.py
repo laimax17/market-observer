@@ -74,3 +74,43 @@ def test_send_raises_on_http_error() -> None:
 
     with pytest.raises(DiscordError):
         _notifier(handler).send("hello")
+
+
+def test_send_embeds_posts_each_batch() -> None:
+    posted: list[list[dict]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        posted.append(json.loads(request.content)["embeds"])
+        return httpx.Response(204)
+
+    batches = [
+        [{"title": "A", "color": 1}, {"title": "B", "color": 2}],
+        [{"title": "C", "color": 3}],
+    ]
+    n = _notifier(handler).send_embeds(batches)
+    assert n == 2
+    assert posted == batches
+
+
+def test_send_embeds_skips_empty_batches() -> None:
+    posted: list[list[dict]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        posted.append(json.loads(request.content)["embeds"])
+        return httpx.Response(204)
+
+    n = _notifier(handler).send_embeds([[], [{"title": "X"}], []])
+    assert n == 1
+    assert posted == [[{"title": "X"}]]
+
+
+def test_send_embeds_raises_on_http_error() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500)
+
+    with pytest.raises(DiscordError):
+        _notifier(handler).send_embeds([[{"title": "X"}]])

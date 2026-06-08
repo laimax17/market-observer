@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from market_observer.domain.models import OptionsSignal
 from market_observer.domain.options_math import compute_options_signal
@@ -19,6 +20,7 @@ def build_options_signal(
     symbol: str,
     spot: float | None,
     max_expiries: int = DEFAULT_MAX_EXPIRIES,
+    as_of: date | None = None,
 ) -> OptionsSignal:
     expiries = provider.get_option_expiries(symbol)
     if not expiries:
@@ -33,4 +35,4 @@ def build_options_signal(
     if not chains:
         return OptionsSignal(symbol=symbol, has_data=False, note="option chain unavailable")
 
-    return compute_options_signal(symbol, spot, chains)
+    return compute_options_signal(symbol, spot, chains, as_of=as_of)

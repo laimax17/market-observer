@@ -5,10 +5,10 @@
 它会做三件事：
 
 - **代码计算技术指标**（RSI、MACD、均线、波动率、ATR、区间位置、相对成交量）
-- **EOD 期权信号**（近月/次月 ATM 隐含波动率、IV 期限结构是否倒挂、Put/Call 比、IV skew）
-- **多智能体 LLM 分析团**（技术面 / 期权 / 宏观 三位专科分析师 + 一位主编），把上面这些结构化事实写成一段可读的叙事
+- **EOD 期权信号**（近月/次月 ATM 隐含波动率、IV 期限结构是否倒挂、Put/Call 比、IV skew、期权隐含波动幅度）
+- **多智能体 LLM 分析团**（技术面 / 期权 / 宏观 三位专科分析师 + 一位主编），为每只标的写出四段式解读（📌近况 / 🔍归因 / 🔭预测），把结构化事实 + 真实新闻标题写成可读叙事
 
-它**不下单**、**不输出"方向 + 置信度"数字**、**不碰任何真实交易系统**。数据来自免费源（yfinance），可能延迟，仅供研究参考。
+它会给**方向 + 粗略概率 + 目标价区间**，但这是**研究观点不是交易信号**：目标价锚定代码算出的关键价位（期权隐含 1σ / ATR / 均线），不凭空捏造；概率是模型粗略估计、非校准概率。它**永不下单、永不接入任何真实交易账户、不碰主交易系统**。数据来自免费源（yfinance），可能延迟，仅供研究参考，请独立判断、自负盈亏。
 
 ---
 
@@ -44,16 +44,16 @@
               └───────────────────┬──────────────────────────────────────┘
                                   ▼
                          ┌─────────────────────────────────────────────┐
-                         │  4. 渲染 render_briefing → Markdown          │
+                         │  4. 双渲染器（共享 render/format.py 格式真源）│
                          └───────────────────┬─────────────────────────┘
                                              ▼
                     ┌────────────────────────┴────────────────────────┐
                     ▼                                                  ▼
        ┌────────────────────────┐                      ┌──────────────────────────┐
-       │ 5a. 存盘                │                      │ 5b. 推送 Discord          │
-       │ output/briefing_日期.md │                      │ 按2000字上限自动分段(chunk)│
-       └────────────────────────┘                      │ 逐段 POST 到 webhook       │
-                                                        └──────────────────────────┘
+       │ 5a. 存盘 (markdown)     │                      │ 5b. 推送 Discord (embeds) │
+       │ output/briefing_日期.md │                      │ 彩色卡片，按≤10卡/≤6000字 │
+       │ 右对齐表格 + 四段式解读 │                      │ 分批 send_embeds 逐批POST │
+       └────────────────────────┘                      └──────────────────────────┘
 ```
 
 ### 优雅降级（任何一环挂了都不会整体失败）
@@ -81,7 +81,7 @@
    `https://discord.com/api/webhooks/123456.../abcdef...`
 4. 把它填进 `.env` 的 `MO_DISCORD_WEBHOOK_URL`
 
-**推送行为：** 简报是 Markdown，可能上千字；Discord 单条消息上限 2000 字。程序会自动按行边界把内容切成 ≤1900 字的若干段（`chunk_text`，留了余量），逐段 POST。所以一份简报到你手机上可能是连续几条消息。任何一段失败会记日志，但**已存到本地的 `.md` 不受影响**。
+**推送行为：** Discord 不渲染 Markdown 表格，所以推送用的是**原生彩色 embeds 卡片**：一张总览卡（今日看点 + 全盘综述 + 宏观），加每只标的一张卡（按强/弱/中性着色、指标排成 inline 字段、四段式解读放在卡片描述里）。Discord 限制单条消息 ≤10 张卡且 ≤6000 字，程序用 `batch_embeds` 自动分批，再用 `send_embeds` 逐批 POST。所以一份简报到你手机上可能是连续几条消息。任何一段失败会记日志，但**已存到本地的 `.md` 不受影响**。（纯文本 `send` 仍保留作兜底。）
 
 > 手机上你在 Discord App 里就能直接看到，无需开电脑。
 
@@ -168,11 +168,13 @@ src/market_observer/
   config.py              # 环境变量 → Settings
   pipeline.py            # 全链路装配（可测，无网络/LLM 构造）
   run_briefing.py        # 薄入口：构造真实 Provider/LLM/Discord，跑 + 存 + 推
-  domain/                # 纯计算：models / indicators / options_math
-  data/                  # Provider 协议 + yfinance 实现 + 选股/行情/期权/宏观/事件
+  domain/                # 纯计算：models / indicators / options_math / forecast(价位+近期收益)
+  data/                  # Provider 协议 + yfinance 实现 + 选股/行情/期权/宏观/事件/新闻
   agents/                # LLM 客户端 + 3专科 + 主编 + orchestrator(固定DAG)
-  render/markdown.py     # Briefing → Markdown
-  notify/discord.py      # 分段 + webhook 推送
+  render/format.py       # 双渲染器共享的格式真源（数字/强弱标签+颜色/今日看点）
+  render/markdown.py     # Briefing → Markdown（存档）
+  render/discord.py      # Briefing → 彩色 embeds 卡片（推送）
+  notify/discord.py      # embeds 分批 + webhook 推送（含文本兜底）
 docs/00_design.md        # 权威设计文档
 crontab.example          # 定时任务示例
 ```

@@ -19,8 +19,10 @@ from pathlib import Path
 from market_observer.agents.llm_client import DeepSeekClient, LLMClient
 from market_observer.config import Settings, load_settings
 from market_observer.data.yfinance_provider import YFinanceProvider
+from market_observer.domain.models import Briefing
 from market_observer.notify.discord import DiscordError, DiscordNotifier
 from market_observer.pipeline import generate_briefing
+from market_observer.render.discord import render_embed_messages
 from market_observer.render.markdown import render_briefing
 
 logging.basicConfig(
@@ -53,13 +55,14 @@ def _save(markdown: str, output_dir: str, as_of: date) -> Path:
     return path
 
 
-def _push(settings: Settings, markdown: str) -> None:
+def _push(settings: Settings, briefing: Briefing) -> None:
     if not settings.discord_webhook_url:
         logger.warning("MO_DISCORD_WEBHOOK_URL not set; skipping Discord push")
         return
     notifier = DiscordNotifier(webhook_url=settings.discord_webhook_url)
     try:
-        sent = notifier.send(markdown)
+        batches = render_embed_messages(briefing)
+        sent = notifier.send_embeds(batches)
         logger.info("pushed briefing to Discord in %d message(s)", sent)
     except DiscordError:
         logger.exception("Discord push failed; briefing is still saved on disk")
@@ -84,7 +87,7 @@ def main() -> None:
     )
     markdown = render_briefing(briefing)
     _save(markdown, settings.output_dir, as_of)
-    _push(settings, markdown)
+    _push(settings, briefing)
     logger.info("done")
 
 
