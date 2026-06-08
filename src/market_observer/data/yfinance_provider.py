@@ -84,11 +84,21 @@ class YFinanceProvider:
 
     def get_sp500_universe(self) -> list[str]:
         try:
+            import io
+
+            import httpx
             import pandas as pd
 
-            tables = pd.read_html(
-                "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+            # Wikipedia 403s on the default urllib User-Agent, so fetch the
+            # page ourselves with a browser-like UA and hand the HTML to pandas.
+            resp = httpx.get(
+                "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+                headers={"User-Agent": "Mozilla/5.0 (market-observer)"},
+                timeout=30.0,
+                follow_redirects=True,
             )
+            resp.raise_for_status()
+            tables = pd.read_html(io.StringIO(resp.text))
             symbols = tables[0]["Symbol"].astype(str).tolist()
             cleaned = [s.replace(".", "-").strip().upper() for s in symbols if s]
             if cleaned:

@@ -10,6 +10,7 @@ dependencies = [
     "yfinance>=0.2.40",
     "pandas>=2.2",
     "numpy>=1.26",
+    "lxml>=5.0",  # pandas.read_html for the live S&P 500 universe (else fallback list)
 ]
 
 [project.scripts]
