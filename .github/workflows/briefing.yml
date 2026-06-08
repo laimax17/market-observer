@@ -12,7 +12,7 @@ concurrency:
   group: daily-briefing
   cancel-in-progress: false
 
-# 需要写权限，才能把当天的简报存档 commit 回仓库。
+# 需要写权限，才能把当天的简报 push 到 briefings 分支（main 只存代码）。
 permissions:
   contents: write
 
@@ -25,7 +25,8 @@ jobs:
       # 没设的话程序会优雅降级：没 LLM key → 纯数据；没 webhook → 只存档不推送。
       MO_DEEPSEEK_API_KEY: ${{ secrets.MO_DEEPSEEK_API_KEY }}
       MO_DISCORD_WEBHOOK_URL: ${{ secrets.MO_DISCORD_WEBHOOK_URL }}
-      # CI 把简报写进 tracked 的 briefings/ 目录（本地默认的 output/ 是 gitignored 的）。
+      # 简报先写进 runner 工作区的 briefings/（临时），随后 publish 步骤把它 push 到
+      # 专门的 briefings 分支。main 分支只存代码，不存报告。
       MO_OUTPUT_DIR: briefings
       MO_PINNED_SYMBOLS: SPY,QQQ
       MO_WATCHLIST_SIZE: "10"
@@ -47,14 +48,29 @@ jobs:
       - name: Generate briefing
         run: uv run python -m market_observer.run_briefing
 
-      - name: Archive briefing back to the repo
+      # 把生成的报告 push 到独立的 briefings 分支（不碰 main）。用 git worktree 把
+      # briefings 分支 checkout 到另一个目录，只在那里提交报告文件。
+      - name: Publish briefing to the briefings branch
         run: |
-          if [ -n "$(git status --porcelain briefings/)" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add briefings/
-            git commit -m "briefing: $(date -u +%Y-%m-%d)"
-            git push
-          else
-            echo "no new briefing file to commit"
+          set -euo pipefail
+          shopt -s nullglob
+          files=(briefings/briefing_*.md)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no briefing file produced — nothing to publish"
+            exit 0
           fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin briefings
+          git worktree add ../briefings-pub origin/briefings
+          mkdir -p ../briefings-pub/briefings
+          cp "${files[@]}" ../briefings-pub/briefings/
+          cd ../briefings-pub
+          git checkout -B briefings
+          git add briefings/
+          if git diff --cached --quiet; then
+            echo "no new briefing to commit"
+            exit 0
+          fi
+          git commit -m "briefing: $(date -u +%Y-%m-%d)"
+          git push origin briefings

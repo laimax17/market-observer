@@ -168,13 +168,13 @@ uv run python -m market_observer.run_briefing
 
    > ⚠️ 密钥**只**放在这里（GitHub 加密保存），**绝不要**写进代码或 `.env.example` 提交上去。
 
-4. **给工作流写权限**：工作流跑完会把当天简报 commit 回 `briefings/` 目录，需要写权限。进 **Settings → Actions → General → Workflow permissions**，选 **“Read and write permissions”** 并保存（否则最后那步 `git push` 会失败）。
+4. **给工作流写权限**：工作流跑完会把当天简报 push 到独立的 `briefings` 分支（`main` 只存代码），需要写权限。进 **Settings → Actions → General → Workflow permissions**，选 **“Read and write permissions”** 并保存（否则最后那步 `git push` 会失败）。
 
-5. **手动试跑一次**：进 **Actions → 左侧 `daily-briefing` → 右侧 “Run workflow”** 手动触发。绿勾即成功；这时你的 Discord 应该收到推送，`briefings/` 里也多出一份 `briefing_日期.md`。
+5. **手动试跑一次**：进 **Actions → 左侧 `daily-briefing` → 右侧 “Run workflow”** 手动触发。绿勾即成功；这时你的 Discord 应该收到推送，切到 `briefings` 分支可以看到 `briefings/` 里多出一份 `briefing_日期.md`。
 
 6. **之后自动跑**：工作流已设定 **周一至五 12:00 UTC（≈ 美东 08:00）** 自动触发（GitHub 定时可能延迟最多 ~15 分钟，盘前无所谓）。想改时间或观察清单，编辑 `briefing.yml` 里的 `cron` 和 `MO_PINNED_SYMBOLS` / `MO_WATCHLIST_SIZE` 即可。
 
-**和 cron 方式的取舍**：GitHub Actions 免费额度对每天一跑绰绰有余、不用自己维护机器；缺点是定时不精确（可接受）、简报会以 commit 形式存在你的公开 fork 里（不想公开就把 fork 设为 private）。
+**和 cron 方式的取舍**：GitHub Actions 免费额度对每天一跑绰绰有余、不用自己维护机器；缺点是定时不精确（可接受）、简报会以 commit 形式存在你的公开 fork 的 `briefings` 分支里（不想公开就把 fork 设为 private）。
 
 ---
 
