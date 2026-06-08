@@ -1,0 +1,60 @@
+name: daily-briefing
+
+# 每个工作日美股盘前跑一次，外加一个手动触发按钮（Actions 页面的 "Run workflow"）。
+on:
+  schedule:
+    # 12:00 UTC ≈ 美东 08:00。GitHub 的定时触发可能延迟最多 ~15 分钟，盘前无所谓。
+    - cron: "0 12 * * 1-5"
+  workflow_dispatch: {}
+
+# 同一时间只跑一个，避免手动触发和定时撞车。
+concurrency:
+  group: daily-briefing
+  cancel-in-progress: false
+
+# 需要写权限，才能把当天的简报存档 commit 回仓库。
+permissions:
+  contents: write
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # 密钥从仓库 Secrets 注入（Settings → Secrets and variables → Actions）。
+      # 没设的话程序会优雅降级：没 LLM key → 纯数据；没 webhook → 只存档不推送。
+      MO_DEEPSEEK_API_KEY: ${{ secrets.MO_DEEPSEEK_API_KEY }}
+      MO_DISCORD_WEBHOOK_URL: ${{ secrets.MO_DISCORD_WEBHOOK_URL }}
+      # CI 把简报写进 tracked 的 briefings/ 目录（本地默认的 output/ 是 gitignored 的）。
+      MO_OUTPUT_DIR: briefings
+      MO_PINNED_SYMBOLS: SPY,QQQ
+      MO_WATCHLIST_SIZE: "10"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Provision Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Generate briefing
+        run: uv run python -m market_observer.run_briefing
+
+      - name: Archive briefing back to the repo
+        run: |
+          if [ -n "$(git status --porcelain briefings/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add briefings/
+            git commit -m "briefing: $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "no new briefing file to commit"
+          fi

@@ -22,6 +22,7 @@ venv/
 .mypy_cache/
 
 # Output artefacts
+# output/ is local-only scratch; briefings/ is the CI archive committed back
+# to the repo by the GitHub Actions workflow, so it is intentionally tracked.
 output/
-briefings/
 *.log
