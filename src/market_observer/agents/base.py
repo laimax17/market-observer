@@ -52,8 +52,15 @@ def technical_facts(snap: SymbolSnapshot) -> dict[str, Any]:
 
 def options_facts(snap: SymbolSnapshot) -> dict[str, Any]:
     o = snap.options
+    ev = snap.event
+    days_to_earnings = ev.days_to_earnings if ev else None
     if o is None or not o.has_data:
-        return {"symbol": snap.symbol, "has_data": False, "note": (o.note if o else "no data")}
+        return {
+            "symbol": snap.symbol,
+            "has_data": False,
+            "note": (o.note if o else "no data"),
+            "days_to_earnings": days_to_earnings,
+        }
     return {
         "symbol": snap.symbol,
         "has_data": True,
@@ -61,9 +68,14 @@ def options_facts(snap: SymbolSnapshot) -> dict[str, Any]:
         "next_atm_iv": _r(o.next_atm_iv, 4),
         "term_structure": _r(o.term_structure, 4),
         "term_structure_inverted": o.term_structure_inverted,
+        "front_days_to_expiry": o.front_days_to_expiry,
+        "implied_move_pct": _r(o.implied_move_pct),
         "put_call_volume_ratio": _r(o.put_call_volume_ratio),
         "put_call_oi_ratio": _r(o.put_call_oi_ratio),
         "iv_skew": _r(o.iv_skew, 4),
+        # Context for judging whether IV is rich/cheap and why it may be inverted.
+        "realized_vol_20_pct": _r(snap.technicals.realized_vol_20),
+        "days_to_earnings": days_to_earnings,
     }
 
 
