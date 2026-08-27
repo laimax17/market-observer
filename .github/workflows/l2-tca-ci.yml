@@ -1,0 +1,54 @@
+name: l2-tca-ci
+
+# The L2 order book / TCA project is self-contained in l2-tca/, so its CI only
+# runs when something in that directory changes.
+on:
+  push:
+    paths: ["l2-tca/**", ".github/workflows/l2-tca-ci.yml"]
+  pull_request:
+    paths: ["l2-tca/**", ".github/workflows/l2-tca-ci.yml"]
+  workflow_dispatch: {}
+
+defaults:
+  run:
+    working-directory: l2-tca
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Provision Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --python ${{ matrix.python-version }}
+
+      - name: Lint
+        run: |
+          uv run ruff check src tests
+          uv run ruff format --check src tests
+
+      # The suite is hermetic: the feed tests run against the bundled mock venue
+      # on loopback, so no venue access is needed.
+      - name: Test
+        run: uv run pytest -q
+
+      # Proves the end-to-end path on every commit: record from the mock venue,
+      # export to Parquet, read it back and validate it.
+      - name: End-to-end smoke
+        run: |
+          uv run l2tca record --mock --mock-rate 200 --max-messages 500 --out /tmp/raw
+          uv run l2tca export /tmp/raw --out /tmp/parquet
+          uv run l2tca inspect --root /tmp/parquet --table tick
+          uv run l2tca bench /tmp/raw --warmup 50

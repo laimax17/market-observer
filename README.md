@@ -214,3 +214,11 @@ crontab.example          # 定时任务示例
 这是**有意分开**的沙箱项目。主项目 `agentic_trading_system` 是 fail-closed、单写者、事件溯源的交易核心，契约已冻结；本项目是探索性的、只读的，可能快速演进。**两者不共享代码。**
 
 如果这里的信号被证明有价值，集成路径是走主系统的 `04_intelligence_layer` 设计——而不是直接 link 代码。详见 [`docs/00_design.md`](docs/00_design.md)。
+
+---
+
+## 另一个项目：`l2-tca/`
+
+本仓库还包含一个**完全独立**的作品集项目 [`l2-tca/`](l2-tca/)：Kraken WebSocket v2
+的实时 L2 订单簿重建 + 执行成本分析（TCA）。它有自己的 `pyproject.toml`、依赖、测试
+和 README，与 market-observer 不共享任何代码，两边互不影响。
