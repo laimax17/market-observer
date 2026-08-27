@@ -37,6 +37,9 @@ extend-exclude = [".venv", "build", "dist", "data", "notebooks"]
 select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["l2tca", "tests"]
+
 [tool.pytest.ini_options]
 addopts = "--import-mode=importlib -q"
 pythonpath = ["src"]

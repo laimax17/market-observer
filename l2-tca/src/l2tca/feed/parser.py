@@ -30,6 +30,8 @@ from typing import Any, Literal
 
 BookSide = Literal["bid", "ask"]
 
+_EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
+
 
 @dataclass(frozen=True, slots=True)
 class Level:
@@ -134,7 +136,12 @@ def parse_timestamp_ns(value: str | None) -> int | None:
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=UTC)
-    return int(dt.timestamp() * 1_000_000_000)
+    # Integer arithmetic, not int(dt.timestamp() * 1e9): a float64 holds ~53 bits of
+    # mantissa, and nanoseconds since 1970 need ~61, so the naive version silently
+    # rounds to the nearest ~256ns. That is larger than several of the intervals this
+    # project measures.
+    delta = dt - _EPOCH
+    return (delta.days * 86_400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1_000
 
 
 def _levels(entries: Any) -> tuple[Level, ...]:

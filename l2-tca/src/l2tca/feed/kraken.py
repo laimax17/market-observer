@@ -33,6 +33,20 @@ TRANSIENT_ERRORS = (
 )
 
 
+#: Handshake statuses that will not fix themselves: a bad path, a blocked host, an
+#: expired credential. 429 is deliberately absent — rate limiting *is* transient.
+FATAL_HANDSHAKE_STATUSES = frozenset({400, 401, 403, 404, 405, 410, 451})
+
+
+class ConnectionRefused(RuntimeError):
+    """The handshake was rejected in a way retrying cannot fix.
+
+    Most often an egress policy or corporate proxy answering 403 to the CONNECT,
+    which looks like a network error but is a configuration problem. Retrying it on
+    a backoff ladder just hides the real cause behind reconnect noise.
+    """
+
+
 class SubscriptionRejected(RuntimeError):
     """The venue refused the subscription (bad symbol, bad depth, ...).
 
@@ -125,6 +139,18 @@ class KrakenFeed:
             try:
                 async for message in self._run_once():
                     yield message
+            except (
+                websockets.exceptions.InvalidStatus,
+                websockets.exceptions.InvalidProxyStatus,
+            ) as exc:
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                if status in FATAL_HANDSHAKE_STATUSES:
+                    raise ConnectionRefused(
+                        f"handshake rejected with HTTP {status} connecting to "
+                        f"{self.settings.ws_url} — check the endpoint and whether an "
+                        f"egress policy or proxy is blocking the venue"
+                    ) from exc
+                raise
             except SubscriptionRejected:
                 raise
             except TRANSIENT_ERRORS as exc:
@@ -159,6 +185,7 @@ class KrakenFeed:
             self.settings.ws_url,
             ping_interval=self.settings.ping_interval_s,
             ping_timeout=self.settings.ping_timeout_s,
+            close_timeout=self.settings.close_timeout_s,
             # permessage-deflate costs CPU on every frame and adds jitter to the
             # very latency this project measures. Book frames are small; skip it.
             compression=None,

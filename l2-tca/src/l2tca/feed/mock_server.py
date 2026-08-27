@@ -108,6 +108,9 @@ class MockKrakenServer:
     go_silent_after_messages:
         Stop sending anything (including heartbeats) while holding the socket open,
         to exercise the staleness watchdog.
+    reject_subscription:
+        Answer the subscribe request with ``success: false``, to exercise the
+        fatal-rejection path.
     """
 
     def __init__(
@@ -120,6 +123,7 @@ class MockKrakenServer:
         seed: int = 7,
         drop_after_messages: int | None = None,
         go_silent_after_messages: int | None = None,
+        reject_subscription: bool = False,
         host: str = "127.0.0.1",
         port: int = 0,
     ) -> None:
@@ -130,6 +134,7 @@ class MockKrakenServer:
         self.seed = seed
         self.drop_after_messages = drop_after_messages
         self.go_silent_after_messages = go_silent_after_messages
+        self.reject_subscription = reject_subscription
         self.host = host
         self.port = port
         self._server: Any | None = None
@@ -192,6 +197,22 @@ class MockKrakenServer:
 
             request = json.loads(await websocket.recv())
             params = request.get("params", {})
+            if self.reject_subscription:
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "method": "subscribe",
+                            "req_id": request.get("req_id"),
+                            "success": False,
+                            "error": "Subscription Not Found",
+                            "time_in": _now_iso(),
+                            "time_out": _now_iso(),
+                        }
+                    )
+                )
+                # Hold the socket open; the client must give up on its own.
+                await websocket.wait_closed()
+                return
             await websocket.send(
                 json.dumps(
                     {
@@ -227,7 +248,10 @@ class MockKrakenServer:
                     self.go_silent_after_messages is not None
                     and sent >= self.go_silent_after_messages
                 ):
-                    await asyncio.Future()  # hold the socket open, send nothing
+                    # Hold the socket open and send nothing: the client's staleness
+                    # watchdog is the only thing that can end this connection.
+                    await websocket.wait_closed()
+                    return
                 await asyncio.sleep(interval)
                 elapsed += interval
                 if elapsed >= next_heartbeat:

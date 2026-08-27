@@ -1,7 +1,7 @@
 """Live feed, raw recording and deterministic replay."""
 
 from l2tca.feed.backoff import ExponentialBackoff
-from l2tca.feed.kraken import KrakenFeed, StaleFeed, SubscriptionRejected
+from l2tca.feed.kraken import ConnectionRefused, KrakenFeed, StaleFeed, SubscriptionRejected
 from l2tca.feed.parser import (
     BookFrame,
     ErrorFrame,
@@ -21,6 +21,7 @@ from l2tca.feed.types import RawMessage
 
 __all__ = [
     "BookFrame",
+    "ConnectionRefused",
     "ErrorFrame",
     "ExponentialBackoff",
     "Frame",

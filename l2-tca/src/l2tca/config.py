@@ -53,6 +53,9 @@ class Settings:
         default_factory=lambda: _env_float("L2TCA_PING_INTERVAL_S", 20.0)
     )
     ping_timeout_s: float = field(default_factory=lambda: _env_float("L2TCA_PING_TIMEOUT_S", 10.0))
+    #: Cap on the closing handshake. The default (10s) means a socket that has gone
+    #: silent also blocks the reconnect that would replace it.
+    close_timeout_s: float = field(default_factory=lambda: _env_float("L2TCA_CLOSE_TIMEOUT_S", 2.0))
 
     backoff_initial_s: float = field(
         default_factory=lambda: _env_float("L2TCA_BACKOFF_INITIAL_S", 0.5)
