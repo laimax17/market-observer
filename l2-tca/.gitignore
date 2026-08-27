@@ -1,0 +1,17 @@
+# Recorded market data: large, machine-specific, never committed.
+# A small, clearly-labelled sample lives in data/samples/ instead.
+data/raw/
+data/parquet/
+data/bench/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.python-version
+
+# Tooling caches
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
